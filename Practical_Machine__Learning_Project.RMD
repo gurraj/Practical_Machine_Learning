@@ -1,0 +1,136 @@
+---
+title: "Practical Machine Learning - Project"
+author: "Gurraj Sangha"
+date: "August 4, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Project Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. 
+
+## Project Goal
+
+In this project, the goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. The participants were asked to perform barbell lifts correctly and incorrectly in 5 different ways. (More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).)
+
+The goal of the project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set, although one may use any of the other variables to predict with. A report describing how the model was built will be created and will discuss (1) how cross validation was used (2) what the expected out of sample error is, (3) why certain choices were made, and (4) the prediction model will be used to predict 20 different test cases.
+
+## Data
+
+The training data for this project are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har. 
+
+# Load the necessary libraries.
+```{r}
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(RColorBrewer)
+library(rattle)
+library(randomForest)
+library(knitr)
+```
+
+# Get the data
+```{r}
+set.seed(12345)
+
+trainUrl <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testUrl <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+training <- read.csv(url(trainUrl), na.strings=c("NA","#DIV/0!",""))
+testing <- read.csv(url(testUrl), na.strings=c("NA","#DIV/0!",""))
+```
+
+# Remove the columns full of NAs and also remove first 7 columns as they are related to time series, and not useful for our purposes.
+```{r}
+
+# Remove NA columns
+remove <- names(testing[,colSums(is.na(testing)) == 0])
+names(remove)
+remove <- remove[8:59]
+# Only use features used in submit cases.
+training <- training[,c(remove,"classe")]
+
+testing <- testing[,c(remove,"problem_id")]
+
+dim(training)
+dim(testing)
+names(training) # examine remaining column names and dimensions of training and testing set.
+
+
+```
+
+# Split the training set into mytrain and mytest sets (60% into for training purposes)
+```{r}
+splitset <- createDataPartition(training$classe, p=0.6, list=FALSE)
+mytrain <- training[splitset, ]
+mytest <- training[-splitset, ]
+
+```
+
+## MODEL BUILDING
+# Three different models will be built -- (1) Decision Trees (rpart) (2) Random Forest and (3) K Nearest Neighbors.
+# Now create Decision Tree model.
+
+# Cross validation is done for each model by setting k=3 (below)
+```{r}
+set.seed(12345)
+fitControl <- trainControl(method='cv', number = 3)
+modDT <- train(classe ~ ., data=mytrain, trControl=fitControl,method="rpart")
+
+```
+# Confusion Matrix Results from Decision Tree
+```{r}
+predictDT <- predict(modDT, mytest)
+cmDT <- confusionMatrix(predictDT, mytest$classe)
+cmDT
+```
+
+# Now create Random Forests model and examine confusion matrix.
+```{r}
+
+modRF <- train(classe ~ ., data=mytrain, trControl=fitControl, method="rf", ntree=100)
+predictRF <- predict(modRF, mytest)
+cmRF <- confusionMatrix(predictRF, mytest$classe)
+cmRF
+```
+
+# Now create K nearest neighbors model and examine confusion matrix.
+```{r}
+ctrlKNN = trainControl(method = "adaptive_cv")
+modelKNN = train(classe ~ ., mytrain, method = "knn", trControl = fitControl)
+predictKNN <- predict(modelKNN, mytest)
+cmKNN <- confusionMatrix(predictKNN, mytest$classe)
+cmKNN
+
+```
+# Overall Results
+```{r}
+AccuracyResults <- data.frame(
+  Model = c('RPART', 'RF', 'KNN'),
+  Accuracy = rbind(cmDT$overall[1], cmRF$overall[1], cmKNN$overall[1])
+)
+print(AccuracyResults)
+```
+## CONCLUSION
+# Given the Random Forest gave the best results on the training set, with  99.21% accuracy and an expected out-of-sample error of 0.79%, let's apply this model to the test set of 20 items.
+```{r}
+predictTEST <- predict(modRF, testing)
+predictTEST
+```
+
+
+
